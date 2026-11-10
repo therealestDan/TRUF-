@@ -1,0 +1,108 @@
+import random
+
+SUITS = ['♣', '♦', '♥', '♠'] # 0=Clubs, 1=Diamonds, 2=Hearts, 3=Spades
+NAMES = ['You', 'Bot 1', 'Bot 2', 'Bot 3']
+
+def get_str(card):
+    ranks = {11: 'J', 12: 'Q', 13: 'K', 14: 'A'}
+    return f"{ranks.get(card[0], card[0])}{SUITS[card[1]]}"
+
+def bid_val(card):
+    return 0 if 11 <= card[0] <= 13 else (1 if card[0] == 14 else card[0])
+
+def play_game():
+    # 1. Deal cards
+    deck = [(rank, suit) for suit in range(4) for rank in range(2, 15)]
+    random.shuffle(deck)
+    hands = [sorted(deck[i*13:(i+1)*13], key=lambda x: (x[1], x[0])) for i in range(4)]
+    
+    # 2. Bidding
+    print("Your hand:", [f"[{i}] {get_str(c)}" for i, c in enumerate(hands[0])])
+    bid_idx = int(input("Select bid card index (0-12): "))
+    
+    bid_cards = [hands[0][bid_idx]] + [random.choice(hands[i]) for i in range(1, 4)]
+    bids = [bid_val(c) for c in bid_cards]
+    
+    for i in range(4):
+        print(f"{NAMES[i]} bid card: {get_str(bid_cards[i])} (Tricks: {bids[i]})")
+
+    # Determine Trump (Highest trick value, then Highest suit)
+    best = max(range(4), key=lambda i: (bids[i], bid_cards[i][1]))
+    trump_suit = bid_cards[best][1]
+    total_bids = sum(bids)
+    
+    print(f"\n{NAMES[best]} wins the bid. Trump is {SUITS[trump_suit]}. Total bids: {total_bids}")
+
+    if total_bids == 13:
+        adj = int(input("Adjust bids by (+1 or -1): ")) if best == 0 else random.choice([-1, 1])
+        bids = [b + adj for b in bids]
+        total_bids = sum(bids)
+        print(f"Bids adjusted by {adj}. New total: {total_bids}")
+
+    mode = "MAIN ATAS" if total_bids > 13 else "MAIN BAWAH"
+    print(f"Mode: {mode}\n")
+
+    # 3. Play Phase
+    tricks_won = [0, 0, 0, 0]
+    lead = best
+    trump_broken = False
+
+    for trick in range(13):
+        trick_cards = []
+        led_suit = None
+
+        for i in range(4):
+            curr = (lead + i) % 4
+            hand = hands[curr]
+            
+            # Find legal moves
+            legal = [c for c in hand if c[1] == led_suit] if led_suit else []
+            if not legal:
+                if not led_suit and not trump_broken:
+                    legal = [c for c in hand if c[1] != trump_suit] or hand # Can't lead trump unless forced
+                else:
+                    legal = hand # Can play anything
+                    
+            if curr == 0:
+                print(f"Your hand:", [f"[{j}] {get_str(c)}" for j, c in enumerate(hand)])
+                while True:
+                    c_idx = int(input("Play card index: "))
+                    played = hand[c_idx]
+                    if played in legal: break
+                    print("Illegal move! You must follow suit or follow trump leading rules.")
+                played = hand.pop(c_idx)
+            else:
+                played = hand.pop(hand.index(random.choice(legal)))
+
+            if i == 0: led_suit = played[1]
+            if played[1] == trump_suit: trump_broken = True
+            
+            display_card = "[Facedown Trump]" if played[1] == trump_suit else get_str(played)
+            print(f"{NAMES[curr]} plays {display_card}")
+            trick_cards.append((curr, played))
+
+        # Evaluate Trick
+        win_player, win_card = trick_cards[0]
+        for p, c in trick_cards[1:]:
+            if (c[1] == trump_suit and win_card[1] != trump_suit) or \
+               (c[1] == win_card[1] and c[0] > win_card[0]):
+                win_player, win_card = p, c
+
+        print(f"--> {NAMES[win_player]} wins the trick with {get_str(win_card)}!\n")
+        tricks_won[win_player] += 1
+        lead = win_player
+
+    # 4. Scoring (Method 1)
+    print("--- FINAL SCORES ---")
+    for i in range(4):
+        diff = tricks_won[i] - bids[i]
+        
+        if mode == "MAIN BAWAH":
+            pts = diff if diff < 0 else (-diff if diff > 0 else 0)
+        else: # MAIN ATAS
+            pts = diff if diff > 0 else (-diff if diff < 0 else 0)
+            
+        print(f"{NAMES[i]:5} | Bid: {bids[i]:2} | Won: {tricks_won[i]:2} | Points: {pts:3}")
+
+if __name__ == "__main__":
+    play_game()
